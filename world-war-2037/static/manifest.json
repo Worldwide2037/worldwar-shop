@@ -1,0 +1,25 @@
+{
+  "id": "./",
+  "name": "WORLD WAR 2037",
+  "short_name": "WORLD WAR",
+  "description": "WORLD WAR 2037 - Sci-Fi Game",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#050b14",
+  "theme_color": "#071525",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

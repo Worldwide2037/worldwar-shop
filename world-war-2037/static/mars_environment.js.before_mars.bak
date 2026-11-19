@@ -1,0 +1,116 @@
+
+// WORLD WAR 2037 - MARS ENVIRONMENT
+
+const marsWorld = new THREE.Group();
+scene.add(marsWorld);
+
+scene.background = new THREE.Color(0xb96b50);
+
+const marsLight = new THREE.HemisphereLight(
+  0xffc5a0, 0x54251b, 1.5
+);
+marsWorld.add(marsLight);
+
+// Large red Mars ground
+const groundGeo = new THREE.PlaneGeometry(
+  1200, 1200, 100, 100
+);
+
+const positions = groundGeo.attributes.position;
+
+for (let i = 0; i < positions.count; i++) {
+  const x = positions.getX(i);
+  const y = positions.getY(i);
+
+  const height =
+    Math.sin(x * 0.025) * 2.5 +
+    Math.cos(y * 0.035) * 2 +
+    Math.sin((x + y) * 0.018) * 3;
+
+  positions.setZ(i, height);
+}
+
+groundGeo.computeVertexNormals();
+
+const ground = new THREE.Mesh(
+  groundGeo,
+  new THREE.MeshStandardMaterial({
+    color: 0x9b3926,
+    roughness: 1
+  })
+);
+
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -1;
+ground.receiveShadow = true;
+marsWorld.add(ground);
+
+// Mars rocks
+const rockMaterial = new THREE.MeshStandardMaterial({
+  color: 0x633023,
+  roughness: 1
+});
+
+for (let i = 0; i < 100; i++) {
+  const radius = 1 + Math.random() * 5;
+
+  const rock = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(radius, 1),
+    rockMaterial
+  );
+
+  const angle = Math.random() * Math.PI * 2;
+  const distance = 35 + Math.random() * 500;
+
+  rock.position.set(
+    Math.cos(angle) * distance,
+    radius * 0.35 - 0.5,
+    Math.sin(angle) * distance
+  );
+
+  rock.scale.set(
+    1 + Math.random(),
+    0.5 + Math.random(),
+    1 + Math.random()
+  );
+
+  rock.rotation.set(
+    Math.random(),
+    Math.random(),
+    Math.random()
+  );
+
+  marsWorld.add(rock);
+}
+
+// Distant Mars hills
+const hillMaterial = new THREE.MeshStandardMaterial({
+  color: 0x713c32,
+  roughness: 1
+});
+
+for (let i = 0; i < 18; i++) {
+  const hill = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 24, 16),
+    hillMaterial
+  );
+
+  const angle = i / 18 * Math.PI * 2;
+  const distance = 420 + Math.random() * 100;
+
+  hill.position.set(
+    Math.cos(angle) * distance,
+    5,
+    Math.sin(angle) * distance
+  );
+
+  hill.scale.set(
+    60 + Math.random() * 60,
+    25 + Math.random() * 35,
+    45 + Math.random() * 40
+  );
+
+  marsWorld.add(hill);
+}
+
+marsWorld.visible = false;

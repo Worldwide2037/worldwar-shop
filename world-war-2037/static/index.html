@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>WORLD WAR</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#071525">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+<div id="loading"><div class="logo">WORLD <span>WAR</span></div><p>Preparing arena...</p></div>
+<div id="hud">
+  <div class="topbar">
+    <div class="brand">WORLD <b>WAR</b><small>FREE ROAM</small></div>
+    <div class="score"><span>BLUE <b id="blueScore">0</b></span><span>RED <b id="redScore">0</b></span></div>
+    <div class="timer" id="timer">02:00</div>
+  </div>
+  <div class="crosshair"><i></i><b></b></div>
+  <div class="bottom">
+    <div class="status"><span>SHIELD</span><div class="bar"><i id="healthBar"></i></div><b id="health">100</b></div>
+    <div class="hint" id="hint">Drag to look · Joystick to move · TAP to FIRE</div>
+  </div>
+  <div id="message"></div>
+  <div id="touch">
+    <div id="stickZone"><div id="stick"><span></span></div></div>
+    <button id="tagBtn">FIRE</button>
+  </div>
+</div>
+
+
+<!-- WORLD_WAR_PRO_MENU_V1 -->
+<div id="menu" class="ww-pro-menu">
+  <img class="ww-pro-bg"
+       src="game_profile.jpg"
+       alt="WORLD WAR">
+
+  <div class="ww-pro-shade"></div>
+
+  <div class="ww-pro-content">
+    <button id="startBtn" type="button" class="ww-pro-start">
+      <span>ورود به میدان نبرد</span>
+      <span class="ww-arrow">➜</span>
+    </button>
+  </div>
+</div>
+
+
+<script>
+window.addEventListener("error", function(e) {
+  const box = document.querySelector("#loading");
+  if (box) {
+    box.style.display = "flex";
+    box.innerHTML =
+      '<div style="color:#ff5555;padding:20px;overflow-wrap:anywhere">' +
+      '<h2>WORLD WAR ERROR</h2><pre style="white-space:pre-wrap">' +
+      (e.message || "Unknown error") + '\n' +
+      (e.filename || "") + ':' + (e.lineno || "") +
+      '</pre></div>';
+  }
+});
+
+window.addEventListener("unhandledrejection", function(e) {
+  const box = document.querySelector("#loading");
+  if (box) {
+    box.style.display = "flex";
+    box.innerHTML =
+      '<div style="color:#ff5555;padding:20px;overflow-wrap:anywhere">' +
+      '<h2>WORLD WAR ERROR</h2><pre style="white-space:pre-wrap">' +
+      String(e.reason) + '</pre></div>';
+  }
+});
+</script>
+<!-- WORLD_WAR_DEBUG -->
+
+
+<!-- WORLD_WAR_SPACE_MUSIC_V1 -->
+<script>
+(function(){
+  let ctx = null;
+  let master = null;
+  let playing = false;
+
+  const btn = document.getElementById("wwMusicBtn");
+
+  function startMusic(){
+    try {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ctx = new AC();
+
+        master = ctx.createGain();
+        master.gain.value = 0.0001;
+        master.connect(ctx.destination);
+
+        const notes = [
+          [55, "sine", 0.12],
+          [82.41, "sine", 0.07],
+          [110, "triangle", 0.035],
+          [164.81, "sine", 0.018]
+        ];
+
+        notes.forEach(([freq, type, volume]) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const filter = ctx.createBiquadFilter();
+
+          osc.type = type;
+          osc.frequency.value = freq;
+          filter.type = "lowpass";
+          filter.frequency.value = 350;
+
+          gain.gain.value = volume;
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(master);
+          osc.start();
+        });
+
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.frequency.value = 0.08;
+        lfoGain.gain.value = 0.025;
+        lfo.connect(lfoGain);
+        lfoGain.connect(master.gain);
+        lfo.start();
+      }
+
+      ctx.resume().then(() => {
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.setTargetAtTime(0.16, ctx.currentTime, 1.5);
+        playing = true;
+        btn.textContent = "♫ SOUND ON";
+      });
+    } catch(e) {
+      btn.textContent = "TAP TO ENABLE SOUND";
+    }
+  }
+
+  function stopMusic(){
+    if (!ctx || !master) return;
+    master.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.5);
+    playing = false;
+    btn.textContent = "♫ SOUND OFF";
+  }
+
+  btn.addEventListener("click", () => {
+    if (playing) stopMusic();
+    else startMusic();
+  });
+
+  // مرورگر ممکن است پخش خودکار را مسدود کند.
+  startMusic();
+})();
+</script>
+
+<script type="module" src="game.js"></script>
+
+<script>
+window.addEventListener("error", function(e) {
+  document.body.insertAdjacentHTML("beforeend",
+    '<pre style="position:fixed;z-index:999999;bottom:0;left:0;right:0;background:#300;color:white;padding:12px;max-height:45%;overflow:auto;white-space:pre-wrap">WORLD_WAR_ERROR_DEBUG\n'
+    + e.message + '\n' + e.filename + ':' + e.lineno + '</pre>');
+});
+window.addEventListener("unhandledrejection", function(e) {
+  document.body.insertAdjacentHTML("beforeend",
+    '<pre style="position:fixed;z-index:999999;bottom:0;left:0;right:0;background:#300;color:white;padding:12px">PROMISE ERROR\n'
+    + e.reason + '</pre>');
+});
+</script>
+
+
+<!-- WORLD_WAR_HELMET_HUD_V1 -->
+<img id="wwHelmetHud" src="helmet_hud.png"
+style="
+position:fixed;
+inset:0;
+width:100vw;
+height:100vh;
+object-fit:fill;
+z-index:99999;
+pointer-events:none;
+display:none;
+mix-blend-mode:screen;
+">
+
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .then(() => console.log("WORLD WAR PWA READY"))
+      .catch(err => console.error("PWA ERROR:", err));
+  });
+}
+</script>
+
+</body>
+</html>

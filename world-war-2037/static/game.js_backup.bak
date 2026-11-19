@@ -1,0 +1,1356 @@
+import * as THREE from "./vendor/three.module.js";
+import { createMarsEnvironment } from "./mars_environment.js";
+
+const $ = s => document.querySelector(s);
+const loading=$("#loading"), menu=$("#menu"), hud=$("#hud");
+const blueEl=$("#blueScore"), redEl=$("#redScore"), timerEl=$("#timer");
+const healthEl=$("#health"), healthBar=$("#healthBar"), messageEl=$("#message");
+const touchUI=$("#touch");
+const isTouch=("ontouchstart" in window)||navigator.maxTouchPoints>0;
+
+const scene=new THREE.Scene();
+
+ // WORLD_WAR_MARS_CONNECTED_V1
+ const marsEnvironment = createMarsEnvironment(THREE, scene);
+ const shipFog = scene.fog;
+ let marsMode = false;
+scene.background=new THREE.Color(0x101d30); // WORLD_WAR_LIGHT_FIRE_FIX_V1
+scene.fog=new THREE.Fog(0x101d30,30,78);
+const camera=new THREE.PerspectiveCamera(76,innerWidth/innerHeight,.08,1400);
+camera.position.set(0,1.68,15);
+
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
+
+// NEX_ARENA_GRAPHICS_UPGRADE: tuned for mobile browsers
+try {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+    if (THREE.ACESFilmicToneMapping) renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.42;
+} catch (e) {
+    console.warn("NEX graphics setup:", e);
+}
+
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xc9e8ff,0x35445a,2.25));
+const sun=new THREE.DirectionalLight(0xe2f4ff,2.8);
+sun.position.set(-10,18,9); sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024); scene.add(sun);
+const blueLamp=new THREE.PointLight(0x168dff,48,30); blueLamp.position.set(-13,4,0); scene.add(blueLamp);
+const redLamp=new THREE.PointLight(0xff426d,38,30); redLamp.position.set(13,4,-5); scene.add(redLamp);
+
+const mats={
+ floor:new THREE.MeshStandardMaterial({color:0x293d55,roughness:.82,metalness:.22}),
+ wall:new THREE.MeshStandardMaterial({color:0x354e68,roughness:.72,metalness:.38}),
+ dark:new THREE.MeshStandardMaterial({color:0x1c2c40,roughness:.6,metalness:.45}),
+ trim:new THREE.MeshStandardMaterial({color:0x13cfff,emissive:0x087caa,emissiveIntensity:.75,metalness:.5}),
+ blue:new THREE.MeshStandardMaterial({color:0x167bff,emissive:0x063eaa,emissiveIntensity:.6,metalness:.25}),
+ red:new THREE.MeshStandardMaterial({color:0xff315c,emissive:0x7c092b,emissiveIntensity:.55,metalness:.25}),
+ visor:new THREE.MeshStandardMaterial({color:0xc9f7ff,emissive:0x48dfff,emissiveIntensity:1.2,metalness:.5}),
+ gold:new THREE.MeshStandardMaterial({color:0x8eeaff,emissive:0x087bba,emissiveIntensity:.8,metalness:.7}),
+};
+
+const shootableMeshes=[];
+function addBox(x,y,z,w,h,d,material,edges=false){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
+ mesh.position.set(x,y,z); mesh.castShadow=true; mesh.receiveShadow=true; scene.add(mesh); shootableMeshes.push(mesh);
+ if(edges){
+  const line=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),
+    new THREE.LineBasicMaterial({color:0x24dfff,transparent:true,opacity:.8}));
+  line.position.copy(mesh.position); scene.add(line);
+ }
+ return mesh;
+}
+
+// WORLD_WAR_SHIP_INTERIOR_V1
+// Large fictional spaceship interior with procedural metallic deck texture.
+const floorCanvas = document.createElement("canvas");
+floorCanvas.width = 1024;
+floorCanvas.height = 1024;
+const fctx = floorCanvas.getContext("2d");
+fctx.fillStyle = "#182432";
+fctx.fillRect(0, 0, 1024, 1024);
+
+for (let i = 0; i < 4200; i++) {
+ const x = Math.random() * 1024, y = Math.random() * 1024;
+ fctx.fillStyle = `rgba(180,210,230,${Math.random() * .12})`;
+ fctx.fillRect(x, y, 1 + Math.random() * 5, 1);
+}
+for (let y = 0; y < 1024; y += 128) {
+ for (let x = 0; x < 1024; x += 128) {
+  fctx.fillStyle = ((x / 128 + y / 128) % 2) ? "#202f3d" : "#1b2937";
+  fctx.fillRect(x + 3, y + 3, 122, 122);
+  fctx.strokeStyle = "#405365"; fctx.lineWidth = 4;
+  fctx.strokeRect(x + 3, y + 3, 122, 122);
+  fctx.strokeStyle = "rgba(5,12,20,.8)"; fctx.lineWidth = 2;
+  fctx.strokeRect(x + 10, y + 10, 108, 108);
+  for (const [bx, by] of [[13,13],[115,13],[13,115],[115,115]]) {
+   fctx.fillStyle = "#8193a3";
+   fctx.beginPath(); fctx.arc(x + bx, y + by, 3, 0, Math.PI * 2); fctx.fill();
+  }
+  if ((x / 128 + y / 128) % 3 === 0) {
+   fctx.fillStyle = "#b58b32";
+   fctx.fillRect(x + 18, y + 18, 32, 5);
+   fctx.fillRect(x + 18, y + 27, 20, 3);
+  }
+ }
+}
+const floorTexture = new THREE.CanvasTexture(floorCanvas);
+floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+floorTexture.repeat.set(3, 3);
+if (THREE.SRGBColorSpace) floorTexture.colorSpace = THREE.SRGBColorSpace;
+const deckMaterial = new THREE.MeshStandardMaterial({
+ map: floorTexture, color: 0xffffff, roughness: .72, metalness: .68
+});
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(44, 44), deckMaterial);
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor); shootableMeshes.push(floor);
+
+
+
+// WORLD_WAR_WALL_TEXTURE_V2
+const wallCanvas = document.createElement("canvas");
+wallCanvas.width = 1024;
+wallCanvas.height = 1024;
+const wc = wallCanvas.getContext("2d");
+
+// Dark brushed titanium base
+const bg = wc.createLinearGradient(0, 0, 1024, 1024);
+bg.addColorStop(0, "#8293a1");
+bg.addColorStop(.25, "#34495b");
+bg.addColorStop(.6, "#536879");
+bg.addColorStop(1, "#172838");
+wc.fillStyle = bg;
+wc.fillRect(0, 0, 1024, 1024);
+
+// Large industrial armor plates
+for (let y = 12; y < 1024; y += 252) {
+  for (let x = 12; x < 1024; x += 252) {
+    const g = wc.createLinearGradient(x, y, x + 220, y + 220);
+    g.addColorStop(0, "#a0afba");
+    g.addColorStop(.18, "#64798a");
+    g.addColorStop(.55, "#34495a");
+    g.addColorStop(1, "#172b3d");
+
+    wc.fillStyle = g;
+    wc.fillRect(x, y, 232, 232);
+
+    // Outer metal frame
+    wc.strokeStyle = "#b3c2cc";
+    wc.lineWidth = 5;
+    wc.strokeRect(x + 4, y + 4, 224, 224);
+
+    wc.strokeStyle = "#152535";
+    wc.lineWidth = 7;
+    wc.strokeRect(x + 12, y + 12, 208, 208);
+
+    // Recessed center
+    const inner = wc.createLinearGradient(x, y + 35, x, y + 190);
+    inner.addColorStop(0, "#263a4c");
+    inner.addColorStop(.5, "#526879");
+    inner.addColorStop(1, "#192b3b");
+    wc.fillStyle = inner;
+    wc.fillRect(x + 24, y + 30, 184, 168);
+
+    // Ventilation grille
+    wc.fillStyle = "#0a1723";
+    wc.fillRect(x + 42, y + 62, 112, 78);
+
+    for (let k = 0; k < 9; k++) {
+      wc.fillStyle = "#718696";
+      wc.fillRect(x + 47 + k * 12, y + 67, 4, 68);
+    }
+
+    // Blue illuminated detail
+    wc.shadowColor = "#168fff";
+    wc.shadowBlur = 12;
+    wc.fillStyle = "#168fff";
+    wc.fillRect(x + 28, y + 178, 176, 4);
+    wc.shadowBlur = 0;
+
+    // Small warning panel
+    wc.fillStyle = "#101d29";
+    wc.fillRect(x + 164, y + 60, 32, 65);
+    wc.fillStyle = "#58dfff";
+    wc.fillRect(x + 171, y + 70, 18, 4);
+    wc.fillRect(x + 171, y + 82, 18, 3);
+    wc.fillRect(x + 171, y + 94, 12, 3);
+
+    // Metal bolts
+    for (const bx of [x + 16, x + 216]) {
+      for (const by of [y + 16, y + 216]) {
+        wc.beginPath();
+        wc.arc(bx, by, 5, 0, Math.PI * 2);
+        wc.fillStyle = "#d0dbe2";
+        wc.fill();
+        wc.strokeStyle = "#101c28";
+        wc.lineWidth = 2;
+        wc.stroke();
+      }
+    }
+  }
+}
+
+// Fine metal grain
+for (let i = 0; i < 7000; i++) {
+  const x = Math.random() * 1024;
+  const y = Math.random() * 1024;
+  wc.fillStyle = i % 2
+    ? "rgba(225,240,250,.10)"
+    : "rgba(0,0,0,.13)";
+  wc.fillRect(x, y, Math.random() * 18 + 2, 1);
+}
+
+const wallTexture = new THREE.CanvasTexture(wallCanvas);
+wallTexture.wrapS = THREE.RepeatWrapping;
+wallTexture.wrapT = THREE.RepeatWrapping;
+wallTexture.repeat.set(2, 2);
+
+if (THREE.SRGBColorSpace) {
+  wallTexture.colorSpace = THREE.SRGBColorSpace;
+}
+
+const wallTextureMaterial = new THREE.MeshStandardMaterial({
+  map: wallTexture,
+  color: 0xffffff,
+  metalness: .72,
+  roughness: .42
+});
+// END WORLD_WAR_WALL_TEXTURE_V1
+
+
+// Ship hull and ceiling
+addBox(-22, 4, 0, .8, 8, 44, wallTextureMaterial, true);
+addBox(22, 4, 0, .8, 8, 44, wallTextureMaterial, true);
+// WORLD_WAR_MARS_FRONT_GATE_V1
+addBox(-12.25, 4, -22, 19.5, 8, .8, wallTextureMaterial, true);
+addBox( 12.25, 4, -22, 19.5, 8, .8, wallTextureMaterial, true);
+addBox(0, 7.5, -22, 5, 1, .8, wallTextureMaterial, true);
+addBox(0, 4, 22, 44, 8, .8, wallTextureMaterial, true);
+addBox(0, 8, 0, 44, .45, 44, wallTextureMaterial, false);
+
+// WORLD_WAR_CEILING_TEXTURE_V1
+const ceilingCanvas = document.createElement("canvas");
+ceilingCanvas.width = 1024;
+ceilingCanvas.height = 1024;
+
+const cc = ceilingCanvas.getContext("2d");
+const ceilingGradient = cc.createLinearGradient(0,0,1024,1024);
+ceilingGradient.addColorStop(0,"#526879");
+ceilingGradient.addColorStop(.5,"#192b3b");
+ceilingGradient.addColorStop(1,"#718493");
+
+cc.fillStyle = ceilingGradient;
+cc.fillRect(0,0,1024,1024);
+
+// Large metallic ceiling panels
+for(let y=0;y<1024;y+=128){
+  for(let x=0;x<1024;x+=128){
+    const g=cc.createLinearGradient(x,y,x+128,y+128);
+    g.addColorStop(0,"#758a9b");
+    g.addColorStop(.45,"#26394b");
+    g.addColorStop(1,"#101d2b");
+
+    cc.fillStyle=g;
+    cc.fillRect(x+3,y+3,122,122);
+
+    cc.strokeStyle="#91a9ba";
+    cc.lineWidth=3;
+    cc.strokeRect(x+5,y+5,118,118);
+
+    cc.strokeStyle="rgba(5,15,25,.9)";
+    cc.lineWidth=3;
+    cc.strokeRect(x+13,y+13,102,102);
+
+    // Blue light strips
+    cc.fillStyle="#087fff";
+    cc.shadowColor="#16baff";
+    cc.shadowBlur=12;
+    cc.fillRect(x+22,y+20,84,4);
+    cc.shadowBlur=0;
+
+    // Metallic bolts
+    for(const [bx,by] of [[14,14],[114,14],[14,114],[114,114]]){
+      cc.beginPath();
+      cc.arc(x+bx,y+by,3,0,Math.PI*2);
+      cc.fillStyle="#b7c9d5";
+      cc.fill();
+    }
+  }
+}
+
+const ceilingTexture = new THREE.CanvasTexture(ceilingCanvas);
+ceilingTexture.wrapS = THREE.RepeatWrapping;
+ceilingTexture.wrapT = THREE.RepeatWrapping;
+ceilingTexture.repeat.set(3,3);
+
+if(THREE.SRGBColorSpace){
+  ceilingTexture.colorSpace = THREE.SRGBColorSpace;
+}
+
+const ceilingMaterial = new THREE.MeshStandardMaterial({
+  map:ceilingTexture,
+  color:0xffffff,
+  metalness:.76,
+  roughness:.38
+});
+
+// Add textured ceiling surface slightly below existing roof
+const ceilingSurface = new THREE.Mesh(
+  new THREE.PlaneGeometry(43.5,43.5),
+  ceilingMaterial
+);
+ceilingSurface.rotation.x = Math.PI/2;
+ceilingSurface.position.y = 7.765;
+ceilingSurface.receiveShadow = true;
+scene.add(ceilingSurface);
+
+// END WORLD_WAR_CEILING_TEXTURE_V1
+
+
+const windowMat = new THREE.MeshBasicMaterial({color:0x092b4b, transparent:true, opacity:.82});
+const windowGlow = new THREE.MeshBasicMaterial({color:0x19a9ff});
+for (const side of [-1, 1]) {
+ for (let z = -15; z <= 15; z += 10) {
+  addBox(side * 21.48, 4.65, z, .12, 2.25, 7.2, mats.wall, false);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(.08, 1.55, 5.9), windowMat);
+  glass.position.set(side * 21.36, 4.85, z); scene.add(glass); shootableMeshes.push(glass);
+  addBox(side * 21.25, 3.95, z, .12, .08, 6.2, windowGlow, false);
+  addBox(side * 21.25, 5.75, z, .12, .08, 6.2, windowGlow, false);
+ }
+}
+
+// Ceiling ribs and light strips
+for (let z = -18; z <= 18; z += 6) {
+ addBox(0, 7.55, z, 43, .22, .38, mats.wall, true);
+ addBox(-8, 7.25, z, .18, .28, 2.8, mats.trim, false);
+ addBox(8, 7.25, z, .18, .28, 2.8, mats.trim, false);
+ const lamp = new THREE.Mesh(new THREE.BoxGeometry(5.5, .07, .22),
+  new THREE.MeshBasicMaterial({color:0x65dfff}));
+ lamp.position.set(0, 7.68, z); scene.add(lamp);
+}
+
+// WORLD_WAR_LIGHT_FIRE_V1: soft ceiling fill lights for mobile visibility
+for (const z of [-15,-5,5,15]) {
+ const fill = new THREE.PointLight(0x9bdfff, 22, 17, 1.7);
+ fill.position.set(0, 6.9, z);
+ scene.add(fill);
+}
+
+
+// WORLD_WAR_INTERIOR_V3
+{
+  // Procedural silver spacecraft material
+  const v3Canvas = document.createElement("canvas");
+  v3Canvas.width = 512;
+  v3Canvas.height = 512;
+
+  const v3ctx = v3Canvas.getContext("2d");
+  const v3grad = v3ctx.createLinearGradient(0, 0, 512, 512);
+  v3grad.addColorStop(0, "#aebbc5");
+  v3grad.addColorStop(.45, "#526574");
+  v3grad.addColorStop(1, "#9aaab5");
+  v3ctx.fillStyle = v3grad;
+  v3ctx.fillRect(0, 0, 512, 512);
+
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 4; x++) {
+      const px = x * 128 + 5;
+      const py = y * 128 + 5;
+
+      v3ctx.fillStyle = "#8999a5";
+      v3ctx.fillRect(px, py, 118, 118);
+
+      v3ctx.strokeStyle = "#d5e0e7";
+      v3ctx.lineWidth = 4;
+      v3ctx.strokeRect(px + 3, py + 3, 112, 112);
+
+      v3ctx.strokeStyle = "#40515f";
+      v3ctx.lineWidth = 2;
+      v3ctx.strokeRect(px + 12, py + 12, 94, 94);
+
+      v3ctx.fillStyle = "#263947";
+      for (const [bx, by] of [[15,15],[101,15],[15,101],[101,101]]) {
+        v3ctx.beginPath();
+        v3ctx.arc(px + bx, py + by, 3, 0, Math.PI * 2);
+        v3ctx.fill();
+      }
+    }
+  }
+
+  const v3Texture = new THREE.CanvasTexture(v3Canvas);
+  if (THREE.SRGBColorSpace) v3Texture.colorSpace = THREE.SRGBColorSpace;
+
+  const v3Metal = new THREE.MeshStandardMaterial({
+    map: v3Texture,
+    color: 0xffffff,
+    metalness: .82,
+    roughness: .36
+  });
+
+  const v3Dark = new THREE.MeshStandardMaterial({
+    color: 0x263746,
+    metalness: .9,
+    roughness: .32
+  });
+
+  const v3Blue = new THREE.MeshBasicMaterial({
+    color: 0x32baff
+  });
+
+  const v3Screen = new THREE.MeshBasicMaterial({
+    color: 0x087dbb
+  });
+
+  // Side wall armor above and below existing windows
+  for (const side of [-1, 1]) {
+    for (let z = -16; z <= 16; z += 8) {
+      addBox(side * 21.52, 6.65, z,
+        .13, 1.25, 6.8, v3Metal, true);
+
+      addBox(side * 21.52, 1.05, z,
+        .13, 1.55, 6.8, v3Metal, true);
+
+      addBox(side * 21.40, 5.92, z,
+        .08, .055, 6.5, v3Blue, false);
+
+      addBox(side * 21.40, 1.90, z,
+        .08, .055, 6.5, v3Blue, false);
+
+      // Heavy wall support columns
+      addBox(side * 21.32, 4.0, z - 3.65,
+        .24, 7.0, .22, v3Dark, true);
+
+      // Small control displays
+      addBox(side * 21.28, 3.0, z,
+        .10, .48, 1.45, v3Dark, false);
+
+      addBox(side * 21.20, 3.0, z,
+        .06, .27, .95, v3Screen, false);
+    }
+  }
+
+  // End wall armor panels
+  for (const side of [-1, 1]) {
+    for (let x = -15; x <= 15; x += 10) {
+      addBox(x, 6.35, side * 21.52,
+        8.4, 1.5, .13, v3Metal, true);
+
+      addBox(x, 1.15, side * 21.52,
+        8.4, 1.7, .13, v3Metal, true);
+
+      addBox(x, 5.48, side * 21.40,
+        7.8, .07, .08, v3Blue, false);
+    }
+  }
+
+  // Ceiling armor tiles between existing ceiling ribs
+  for (let x = -15; x <= 15; x += 10) {
+    for (let z = -15; z <= 15; z += 6) {
+      addBox(x, 7.70, z,
+        8.2, .055, 4.8, v3Metal, true);
+
+      addBox(x, 7.64, z,
+        4.8, .045, .10, v3Blue, false);
+
+      // Recessed mechanical vent details
+      addBox(x, 7.62, z + 1.25,
+        2.6, .06, .55, v3Dark, false);
+
+      for (let k = -2; k <= 2; k++) {
+        addBox(x + k * .38, 7.57, z + 1.25,
+          .045, .04, .43, v3Blue, false);
+      }
+    }
+  }
+
+  // Extra structural ceiling beams
+  for (let x = -20; x <= 20; x += 10) {
+    addBox(x, 7.43, 0,
+      .22, .30, 40, v3Dark, true);
+  }
+
+  // Blue light accents along side walls
+  for (const side of [-1, 1]) {
+    addBox(side * 21.22, 6.02, 0,
+      .07, .06, 38, v3Blue, false);
+  }
+}
+
+
+// WORLD_WAR_INTERIOR_V4
+{
+  // Procedural brushed-metal texture
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 512;
+  const ctx = c.getContext("2d");
+
+  const grad = ctx.createLinearGradient(0, 0, 512, 512);
+  grad.addColorStop(0, "#52677a");
+  grad.addColorStop(.45, "#26394b");
+  grad.addColorStop(1, "#718393");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 512);
+
+  for (let i = 0; i < 1800; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    ctx.fillStyle = i % 2 ? "rgba(210,230,245,.10)" : "rgba(0,5,15,.16)";
+    ctx.fillRect(x, y, 1 + Math.random()*35, 1);
+  }
+
+  for (let y = 24; y < 512; y += 64) {
+    ctx.fillStyle = "rgba(5,15,28,.65)";
+    ctx.fillRect(0, y, 512, 3);
+  }
+
+  const metalTexture = new THREE.CanvasTexture(c);
+  metalTexture.wrapS = metalTexture.wrapT = THREE.RepeatWrapping;
+  metalTexture.repeat.set(2, 1);
+  if (THREE.SRGBColorSpace) metalTexture.colorSpace = THREE.SRGBColorSpace;
+
+  const metal = new THREE.MeshStandardMaterial({
+    map: metalTexture,
+    color: 0xffffff,
+    metalness: .82,
+    roughness: .34
+  });
+
+  const darkMetal = new THREE.MeshStandardMaterial({
+    color: 0x101d2a,
+    metalness: .88,
+    roughness: .42
+  });
+
+  const silver = new THREE.MeshStandardMaterial({
+    color: 0x91a8ba,
+    metalness: .9,
+    roughness: .28
+  });
+
+  const blue = new THREE.MeshBasicMaterial({color:0x168dff});
+  const cyan = new THREE.MeshBasicMaterial({color:0x65dfff});
+
+  function wwPart(x,y,z,w,h,d,mat) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w,h,d), mat
+    );
+    m.position.set(x,y,z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    scene.add(m);
+    return m;
+  }
+
+  // Side wall armor panels - keep all windows visible
+  for (const side of [-1,1]) {
+    for (const z of [-15,-5,5,15]) {
+
+      // Upper armor
+      wwPart(side*21.19, 6.78, z, .16, 1.18, 7.35, metal);
+      wwPart(side*21.08, 7.30, z, .10, .07, 6.9, silver);
+
+      // Lower armor
+      wwPart(side*21.19, 1.35, z, .16, 1.55, 7.35, metal);
+      wwPart(side*21.08, .55, z, .10, .08, 6.9, silver);
+
+      // Blue light details
+      wwPart(side*21.07, 6.12, z, .055, .045, 6.6, blue);
+      wwPart(side*21.07, 2.18, z, .055, .045, 6.6, blue);
+
+      // Ventilation grille
+      for (let k = -2; k <= 2; k++) {
+        wwPart(side*21.03, 1.25, z+k*.22, .055, .48, .055, darkMetal);
+      }
+
+      // Armor bolts
+      for (const zz of [-3.25,3.25]) {
+        for (const yy of [.75,1.95,6.3,7.15]) {
+          wwPart(side*21.02, yy, z+zz, .07, .09, .09, silver);
+        }
+      }
+    }
+
+    // Structural supports between windows
+    for (const z of [-10,0,10]) {
+      wwPart(side*21.17, 4.05, z, .22, 6.5, .38, darkMetal);
+      wwPart(side*21.02, 4.05, z, .06, 6.1, .08, silver);
+      wwPart(side*20.99, 4.05, z, .04, 5.3, .035, blue);
+    }
+
+    // Heavy lower wall rails
+    wwPart(side*20.98, .38, 0, .18, .20, 39, darkMetal);
+    wwPart(side*20.95, .51, 0, .08, .045, 39, cyan);
+  }
+
+  // Ceiling: recessed metallic panels between existing ribs
+  for (const z of [-15,-9,-3,3,9,15]) {
+    for (const x of [-16,-8,0,8,16]) {
+      wwPart(x, 7.69, z, 7.1, .055, 4.75, metal);
+      wwPart(x, 7.65, z, 5.8, .035, .09, darkMetal);
+      wwPart(x, 7.62, z, 3.5, .025, .045, cyan);
+
+      // Small ceiling vents
+      for (let k = -2; k <= 2; k++) {
+        wwPart(x+k*.24, 7.60, z, .055, .025, 1.5, darkMetal);
+      }
+    }
+  }
+
+  // Long ceiling side rails
+  for (const x of [-19,19]) {
+    wwPart(x, 7.48, 0, .24, .18, 38, darkMetal);
+    wwPart(x, 7.39, 0, .07, .035, 36, blue);
+  }
+}
+// END WORLD_WAR_INTERIOR_V4
+
+
+// Floor guide lanes
+for (const x of [-7.5, 7.5]) addBox(x, .035, 0, .10, .035, 39, mats.trim, false);
+for (const z of [-19, 19]) addBox(0, .04, z, 15, .04, .16, mats.gold, false);
+
+// Cargo modules and side consoles; keep the center route open
+for (const x of [-17, 17]) {
+ for (const z of [-12, 0, 12]) {
+  addBox(x, 1.25, z, 2.2, 2.5, 2.8, mats.dark, true);
+  addBox(x, 2.55, z, 1.7, .12, 2.25, mats.trim, false);
+  addBox(x, .45, z - 1.43, 1.1, .22, .08, mats.visor, false);
+ }
+}
+for (const z of [-8, 8]) {
+ addBox(-11, 1.0, z, 3.0, 2.0, 1.0, mats.dark, true);
+ addBox(11, 1.0, z, 3.0, 2.0, 1.0, mats.dark, true);
+}
+
+
+
+
+// Floating objective beacon.
+const beacon=new THREE.Group(); beacon.position.set(0,0,0); scene.add(beacon);
+const ring=new THREE.Mesh(new THREE.TorusGeometry(1.2,.035,8,48),mats.trim);
+ring.rotation.x=Math.PI/2; ring.position.y=.08; beacon.add(ring);
+const core=new THREE.Mesh(new THREE.OctahedronGeometry(.42),mats.visor);
+core.position.y=1.05; beacon.add(core);
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(.04,.22,2.1,12,1,true),
+ new THREE.MeshBasicMaterial({color:0x16cfff,transparent:true,opacity:.12}));
+beam.position.y=1.1; beacon.add(beam);
+
+// Player and stylized first-person energy blaster.
+const player={pos:new THREE.Vector3(0,1.68,16),yaw:Math.PI,pitch:0,shield:100,blue:0,red:0};
+camera.position.copy(player.pos);
+const weapon=new THREE.Group();
+weapon.clear();
+
+const customGun = createWorldWarWeapon();
+
+// WORLD_WAR_FIRST_PERSON_IMAGE_V1
+customGun.visible = false;
+
+const rifleTexture = new THREE.TextureLoader().load(
+    "./world_war_rifle_fp.png",
+    texture => {
+        if (THREE.SRGBColorSpace) {
+            texture.colorSpace = THREE.SRGBColorSpace;
+        }
+    },
+    undefined,
+    error => console.error("Rifle image load error:", error)
+);
+
+const rifleMaterial = new THREE.MeshBasicMaterial({
+    map: rifleTexture,
+    transparent: true,
+    alphaTest: 0.025,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+    side: THREE.DoubleSide
+});
+
+const rifleImage = new THREE.Mesh(
+    new THREE.PlaneGeometry(.82, .41),
+    rifleMaterial
+);
+
+rifleImage.position.set(0, -.40, -1.12);;
+rifleImage.rotation.z = 0;
+rifleImage.renderOrder = 999;
+weapon.add(rifleImage);
+
+// WORLD_WAR_FP_ARMS_V1
+const fpArmDark = new THREE.MeshBasicMaterial({
+    color: 0x111b2b,
+    depthTest: false,
+    depthWrite: false
+});
+
+const fpArmBlue = new THREE.MeshBasicMaterial({
+    color: 0x087fff,
+    depthTest: false,
+    depthWrite: false
+});
+
+function makeFPArm(a, b, radius, material) {
+    const start = new THREE.Vector3(...a);
+    const end = new THREE.Vector3(...b);
+    const direction = new THREE.Vector3().subVectors(end, start);
+    const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius * .82, radius, direction.length(), 12),
+        material
+    );
+
+    mesh.position.copy(start).add(end).multiplyScalar(.5);
+    mesh.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        direction.normalize()
+    );
+    mesh.renderOrder = 1001;
+    weapon.add(mesh);
+    return mesh;
+}
+
+// بازوی چپ
+makeFPArm(
+    [-.78, -.78, -.88],
+    [-.24, -.57, -.88],
+    .105, fpArmDark
+);
+
+// بازوی راست
+makeFPArm(
+    [.78, -.78, -.88],
+    [.24, -.57, -.88],
+    .105, fpArmDark
+);
+
+// زره آبی روی ساعدها
+makeFPArm(
+    [-.57, -.69, -.865],
+    [-.40, -.62, -.865],
+    .035, fpArmBlue
+);
+
+makeFPArm(
+    [.57, -.69, -.865],
+    [.40, -.62, -.865],
+    .035, fpArmBlue
+);
+
+// END WORLD_WAR_FP_ARMS_V1
+
+
+// END WORLD_WAR_FIRST_PERSON_IMAGE_V1
+camera.add(weapon);
+scene.add(camera);
+
+// WORLD_WAR_PLAYER_MODEL_V1
+const playerModel = new THREE.Group();
+scene.add(playerModel);
+
+const armorDark = new THREE.MeshStandardMaterial({
+    color: 0x101722, metalness: 0.78, roughness: 0.3
+});
+const armorSilver = new THREE.MeshStandardMaterial({
+    color: 0x8295a8, metalness: 0.88, roughness: 0.25
+});
+const armorBlue = new THREE.MeshStandardMaterial({
+    color: 0x19bfff,
+    emissive: 0x087fff,
+    emissiveIntensity: 1.8
+});
+const armorBlack = new THREE.MeshStandardMaterial({
+    color: 0x050a12, metalness: 0.6, roughness: 0.4
+});
+
+function soldierPart(parent, geometry, material, x, y, z) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+}
+
+// Torso
+soldierPart(playerModel,
+    new THREE.BoxGeometry(.68,.82,.34),
+    armorDark, 0,1.12,0);
+
+// Chest armor
+soldierPart(playerModel,
+    new THREE.BoxGeometry(.62,.38,.08),
+    armorSilver, 0,1.28,-.19);
+
+// Chest light
+soldierPart(playerModel,
+    new THREE.BoxGeometry(.28,.045,.025),
+    armorBlue, 0,1.35,-.245);
+
+// Neck
+soldierPart(playerModel,
+    new THREE.CylinderGeometry(.13,.15,.16,12),
+    armorBlack, 0,1.59,0);
+
+// Helmet
+soldierPart(playerModel,
+    new THREE.SphereGeometry(.24,20,16),
+    armorDark, 0,1.83,0);
+
+// Helmet visor
+soldierPart(playerModel,
+    new THREE.BoxGeometry(.34,.105,.035),
+    armorBlue, 0,1.84,-.205);
+
+// Shoulder armor
+soldierPart(playerModel,
+    new THREE.SphereGeometry(.19,12,10),
+    armorSilver, -.43,1.42,0);
+
+soldierPart(playerModel,
+    new THREE.SphereGeometry(.19,12,10),
+    armorSilver, .43,1.42,0);
+
+// Arms
+const leftArm = new THREE.Group();
+leftArm.position.set(-.43,1.25,0);
+playerModel.add(leftArm);
+
+const rightArm = new THREE.Group();
+rightArm.position.set(.43,1.25,0);
+playerModel.add(rightArm);
+
+for (const arm of [leftArm,rightArm]) {
+    soldierPart(arm,
+        new THREE.BoxGeometry(.19,.48,.22),
+        armorDark,0,-.25,0);
+
+    soldierPart(arm,
+        new THREE.BoxGeometry(.2,.15,.23),
+        armorSilver,0,-.47,0);
+
+    soldierPart(arm,
+        new THREE.SphereGeometry(.105,12,10),
+        armorBlack,0,-.58,-.015);
+}
+
+// Legs
+const leftLeg = new THREE.Group();
+leftLeg.position.set(-.19,.78,0);
+playerModel.add(leftLeg);
+
+const rightLeg = new THREE.Group();
+rightLeg.position.set(.19,.78,0);
+playerModel.add(rightLeg);
+
+for (const leg of [leftLeg,rightLeg]) {
+    soldierPart(leg,
+        new THREE.BoxGeometry(.25,.48,.29),
+        armorDark,0,-.24,0);
+
+    soldierPart(leg,
+        new THREE.BoxGeometry(.27,.16,.32),
+        armorSilver,0,-.46,-.015);
+
+    soldierPart(leg,
+        new THREE.BoxGeometry(.29,.14,.43),
+        armorBlack,0,-.58,-.055);
+}
+
+// Hide model in first-person
+playerModel.visible = false;
+
+// END WORLD_WAR_PLAYER_MODEL_V1
+
+// OLD WEAPON PARTS REMOVED
+const muzzle=new THREE.PointLight(0x35eaff,0,4); muzzle.position.set(.34,-.25,-1.2); weapon.add(muzzle);
+weapon.visible=true;
+
+// Bots: stylized armored training droids, not realistic soldiers.
+const bots=[];
+function makeBot(team,x,z){
+ const group=new THREE.Group(); group.position.set(x,0,z);
+ const main=team==="red"?mats.red:mats.blue;
+ const torso=new THREE.Mesh(new THREE.CapsuleGeometry(.34,.55,4,8),main);
+ torso.position.y=.9; torso.castShadow=true; group.add(torso);
+ const chest=new THREE.Mesh(new THREE.BoxGeometry(.48,.32,.18),mats.dark);
+ chest.position.set(0,1.02,-.24); group.add(chest);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.25,12,10),mats.wall);
+ head.position.y=1.55; head.castShadow=true; group.add(head);
+ const face=new THREE.Mesh(new THREE.BoxGeometry(.34,.09,.08),mats.visor);
+ face.position.set(0,1.56,-.22); group.add(face);
+ for(const side of [-1,1]){
+  const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.105,.42,3,6),main);
+  arm.position.set(side*.43,.95,-.03); arm.rotation.z=side*-.15; group.add(arm);
+  const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.13,.42,3,6),mats.dark);
+  leg.position.set(side*.17,.32,0); group.add(leg);
+ }
+ const halo=new THREE.Mesh(new THREE.TorusGeometry(.48,.025,6,24),team==="red"?mats.red:mats.trim);
+ halo.rotation.x=Math.PI/2; halo.position.y=.06; group.add(halo);
+ scene.add(group);
+ bots.push({group,team,hp:100,alive:true,cooldown:1+Math.random()*2,phase:Math.random()*6,home:new THREE.Vector3(x,0,z)});
+}
+// WORLD_WAR_START_BUTTON_REPAIR_V1
+function spawnBots(){
+  if(bots.length) return;
+  makeBot("blue", -8, -8);
+  makeBot("blue", 8, -8);
+  makeBot("blue", -8, 8);
+  makeBot("red", 8, 8);
+}
+
+const obstacles=[
+ [-11,-6,1.4,9],[-5,-14,10,1.4],[5,14,10,1.4],
+ [0,-5,5.8,1.8],[0,5,5.8,1.8],[-16,7,3.5,3.5],
+ [16,-8,3.5,3.5],[-6,12,4.5,2.5],[7,-12,4.5,2.5],
+ [-16,-15,3,3],[16,14,3,3]
+];
+
+function blocked(x,z,r=.45){
+ if(z > -20.5 && (Math.abs(x)>20.5 || z>20.5)) return true;
+ if(z <= -20.5 && z >= -25.5 && Math.abs(x)>1.95) return true;
+ if(z < -25.5 && (Math.abs(x)>580 || z < -1210)) return true;
+
+ if(z > -20.5){
+  for(const [ox,oz,w,d] of obstacles){
+   if(x>ox-w/2-r && x<ox+w/2+r &&
+      z>oz-d/2-r && z<oz+d/2+r) return true;
+  }
+ }
+ return false;
+}
+
+
+
+ // Ship interior
+ if(z > -20.5){
+  if(Math.abs(x)>20.5 || z>20.5) return true;
+ }
+
+ // Doorway passage
+ if(z <= -20.5 && z >= -25.5){
+  if(Math.abs(x)>1.95) return true;
+ }
+
+ // Mars exploration boundaries
+ if(z < -25.5){
+  if(Math.abs(x)>580 || z < -1210) return true;
+ }
+
+ // Interior obstacles
+ if(z > -20.5){
+  for(const [ox,oz,w,d] of obstacles){
+   if(x>ox-w/2-r&&x<ox+w/2+r&&z>oz-d/2-r&&z<oz+d/2+r)return true;
+  }
+ }
+
+ return false;
+},3,3],[16,14,3,3]
+];
+function blocked(x,z,r=.45){
+ if(Math.abs(x)>20.5||Math.abs(z)>20.5)return true;
+ for(const [ox,oz,w,d] of obstacles){
+  if(x>ox-w/2-r&&x<ox+w/2+r&&z>oz-d/2-r&&z<oz+d/2+r)return true;
+ }
+ return false;
+}
+
+const raycaster=new THREE.Raycaster();
+let running=false,remaining=120,last=performance.now(),fireCooldown=0,damageFlash=0;
+const keys={};
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;if(e.code==="Space")tag()});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+let joy={x:0,y:0},lookId=null,lastX=0,lastY=0,mouseLook=false;
+const stickZone=$("#stickZone"),stick=$("#stick");
+function updateStick(e){
+ const r=stickZone.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+ let dx=e.clientX-cx,dy=e.clientY-cy,len=Math.hypot(dx,dy),max=42;
+ if(len>max){dx=dx/len*max;dy=dy/len*max}
+ joy.x=dx/max;joy.y=dy/max;stick.style.transform=`translate(${dx}px,${dy}px)`;
+}
+if(stickZone){
+ stickZone.addEventListener("pointerdown",e=>{e.preventDefault();stickZone.setPointerCapture(e.pointerId);updateStick(e)});
+ stickZone.addEventListener("pointermove",e=>{if(e.buttons)updateStick(e)});
+ const reset=()=>{joy.x=joy.y=0;stick.style.transform="translate(0,0)"};
+ stickZone.addEventListener("pointerup",reset);stickZone.addEventListener("pointercancel",reset);
+}
+renderer.domElement.addEventListener("pointerdown",e=>{
+ if(!running)return;
+ if(e.pointerType==="mouse"){mouseLook=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)}
+});
+renderer.domElement.addEventListener("pointermove",e=>{
+ if(!running)return;
+ if(e.pointerType==="mouse"&&mouseLook){
+  player.yaw-=(e.clientX-lastX)*.004;player.pitch=Math.max(-1.15,Math.min(1.15,player.pitch-(e.clientY-lastY)*.004));
+  lastX=e.clientX;lastY=e.clientY;
+ }
+});
+renderer.domElement.addEventListener("pointerup",()=>mouseLook=false);
+renderer.domElement.addEventListener("touchstart",e=>{
+ if(!running)return;
+ for(const t of e.changedTouches)if(t.clientX>innerWidth*.32){lookId=t.identifier;lastX=t.clientX;lastY=t.clientY;break}
+},{passive:true});
+renderer.domElement.addEventListener("touchmove",e=>{
+ if(!running||lookId===null)return;
+ for(const t of e.changedTouches)if(t.identifier===lookId){
+  player.yaw-=(t.clientX-lastX)*.006;player.pitch=Math.max(-1.15,Math.min(1.15,player.pitch-(t.clientY-lastY)*.006));
+  lastX=t.clientX;lastY=t.clientY;
+ }
+},{passive:true});
+renderer.domElement.addEventListener("touchend",e=>{for(const t of e.changedTouches)if(t.identifier===lookId)lookId=null},{passive:true});
+
+function say(t){
+ messageEl.textContent=t;
+ setTimeout(()=>{if(messageEl.textContent===t)messageEl.textContent=""},1050);
+}
+// WORLD_WAR_FREE_ROAM_V2: fictional energy blaster and repairable impact marks
+let audioContext = null;
+function playBlasterSound(){
+ try {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+
+  if (!audioContext) audioContext = new AC();
+  if (audioContext.state === "suspended") audioContext.resume();
+
+  const now = audioContext.currentTime;
+
+  // ضربه‌ی بم و کوتاه
+  const low = audioContext.createOscillator();
+  const lowGain = audioContext.createGain();
+
+  low.type = "sine";
+  low.frequency.setValueAtTime(115, now);
+  low.frequency.exponentialRampToValueAtTime(68, now + 0.13);
+
+  lowGain.gain.setValueAtTime(0.0001, now);
+  lowGain.gain.linearRampToValueAtTime(0.045, now + 0.012);
+  lowGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.17);
+
+  low.connect(lowGain);
+  lowGain.connect(audioContext.destination);
+  low.start(now);
+  low.stop(now + 0.18);
+
+  // صدای الکترونیکی ظریف
+  const high = audioContext.createOscillator();
+  const highGain = audioContext.createGain();
+
+  high.type = "triangle";
+  high.frequency.setValueAtTime(430, now);
+  high.frequency.exponentialRampToValueAtTime(190, now + 0.11);
+
+  highGain.gain.setValueAtTime(0.0001, now);
+  highGain.gain.linearRampToValueAtTime(0.018, now + 0.008);
+  highGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+
+  high.connect(highGain);
+  highGain.connect(audioContext.destination);
+  high.start(now);
+  high.stop(now + 0.14);
+
+ } catch(e) {
+  console.warn("Blaster audio:", e);
+ }
+}
+function addImpactMark(point, normal){
+ const group = new THREE.Group();
+ group.position.copy(point).addScaledVector(normal, .018);
+ group.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), normal.clone().normalize());
+ const dark = new THREE.Mesh(
+  new THREE.CircleGeometry(.105, 16),
+  new THREE.MeshBasicMaterial({color:0x172b3c, transparent:true, opacity:.88, depthWrite:false})
+ );
+ group.add(dark);
+ const rim = new THREE.Mesh(
+  new THREE.TorusGeometry(.12,.018,6,24),
+  new THREE.MeshBasicMaterial({color:0x28cfff, transparent:true, opacity:.9})
+ );
+ rim.position.z=.006; group.add(rim);
+ const spark = new THREE.PointLight(0x16bfff, 1.1, 1.8);
+ spark.position.z=.04; group.add(spark);
+ scene.add(group);
+ const born = performance.now();
+ const fade = () => {
+  if (!group.parent) return;
+  const age=(performance.now()-born)/1000;
+  if(age>=10){
+   scene.remove(group);
+   group.traverse(o=>{
+    if(o.geometry) o.geometry.dispose();
+    if(o.material) o.material.dispose();
+   });
+   return;
+  }
+  const opacity=age>8.5?Math.max(0,(10-age)/1.5):1;
+  dark.material.opacity=.94*opacity;
+  rim.material.opacity=.9*opacity;
+  spark.intensity=opacity;
+  requestAnimationFrame(fade);
+ };
+ requestAnimationFrame(fade);
+}
+function tag(){
+ if(!running || fireCooldown>0) return;
+ fireCooldown=.28;
+ playBlasterSound();
+ weapon.position.z=.075;
+ muzzle.intensity=7;
+ setTimeout(()=>{weapon.position.z=0;muzzle.intensity=0},85);
+ const dir=new THREE.Vector3(0,0,-1).applyEuler(camera.rotation).normalize();
+ raycaster.set(camera.position,dir);
+ raycaster.far=45;
+ const hits=raycaster.intersectObjects(shootableMeshes,false);
+ if(hits.length){
+  const hit=hits[0];
+  const normal=hit.face
+   ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+   : new THREE.Vector3(0,1,0);
+  addImpactMark(hit.point,normal);
+  say("SURFACE HIT · REPAIR IN 10s");
+ } else say("ENERGY PULSE");
+}
+// WORLD_WAR_LIGHT_FIRE_V1: reliable mobile fire button
+const fireButton = $("#tagBtn");
+if (fireButton) {
+ fireButton.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (fireButton.setPointerCapture && e.pointerId !== undefined) {
+   try { fireButton.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+  tag();
+ });
+ fireButton.addEventListener("contextmenu", e => e.preventDefault());
+}
+
+function start(){
+  // اول منو را مخفی کن تا خطای احتمالی مانع ورود نشود
+  menu.style.display = "none";
+  hud.style.display = "block";
+  running = true;
+
+  player.pos.set(0,1.68,16);
+  player.yaw = Math.PI;
+  player.pitch = 0;
+  player.shield = 100;
+  player.blue = 0;
+  player.red = 0;
+
+  blueEl.textContent = "0";
+  redEl.textContent = "0";
+  healthEl.textContent = "100";
+  healthBar.style.width = "100%";
+
+  if ($(".score")) $(".score").style.display = "none";
+  timerEl.textContent = "FREE ROAM";
+
+  try {
+    spawnBots();
+  } catch(error) {
+    console.error("Bot spawn error:", error);
+    say("FREE ROAM · BOT SYSTEM UNAVAILABLE");
+  }
+
+  if(audioContext && audioContext.state === "suspended"){
+    audioContext.resume();
+  }
+
+  say("FREE ROAM · EXPLORE THE SHIP");
+}
+
+$("#startBtn").addEventListener("click", start);
+
+function finish(){
+ running=false;menu.style.display="grid";
+ $(".eyebrow").textContent="ROUND COMPLETE";
+ $("h1").innerHTML=player.blue>=player.red?"BLUE <span>WINS</span>":"RED <span>WINS</span>";
+ $(".sub").textContent=`FINAL SCORE · BLUE ${player.blue} — RED ${player.red}`;
+ $("#startBtn").textContent="PLAY AGAIN →";
+}
+let smoothSide=0,smoothForward=0;
+
+
+// WORLD_WAR_CUSTOM_WEAPON_V2
+
+function createWorldWarWeapon() {
+    const gun = new THREE.Group();
+
+    const black = new THREE.MeshStandardMaterial({
+        color:0x080f1b, metalness:.9, roughness:.23
+    });
+    const armor = new THREE.MeshStandardMaterial({
+        color:0x26384c, metalness:.85, roughness:.25
+    });
+    const silver = new THREE.MeshStandardMaterial({
+        color:0xa9c2d8, metalness:.95, roughness:.2
+    });
+    const blue = new THREE.MeshStandardMaterial({
+        color:0x087fff, emissive:0x006dff,
+        emissiveIntensity:3, metalness:.4, roughness:.2
+    });
+    const glass = new THREE.MeshStandardMaterial({
+        color:0x061a36, emissive:0x004cff,
+        emissiveIntensity:1.5, metalness:.6, roughness:.1
+    });
+
+    function part(g,m,x,y,z) {
+        const o = new THREE.Mesh(g,m);
+        o.position.set(x,y,z);
+        o.castShadow = true;
+        o.receiveShadow = true;
+        gun.add(o);
+        return o;
+    }
+
+    function box(w,h,d,x,y,z,m) {
+        return part(new THREE.BoxGeometry(w,h,d),m,x,y,z);
+    }
+
+    function cyl(r1,r2,len,x,y,z,m) {
+        const o=part(new THREE.CylinderGeometry(r1,r2,len,20),m,x,y,z);
+        o.rotation.z=Math.PI/2;
+        return o;
+    }
+
+    // بدنه مرکزی نسل جدید
+    box(1.48,.24,.30,.05,0,0,black);
+    box(1.18,.075,.34,.02,.145,0,armor);
+    box(.72,.045,.35,.18,.205,0,silver);
+    box(.85,.035,.365,.12,-.145,0,black);
+
+    // پوشش‌های زرهی جانبی
+    for(let s of [-1,1]) {
+        box(.82,.12,.035,.02,.025,s*.17,armor);
+        box(.58,.025,.045,.12,.075,s*.195,blue);
+        box(.28,.035,.05,-.38,.055,s*.19,silver);
+        box(.20,.025,.05,.48,-.07,s*.19,blue);
+    }
+
+    // لوله انرژی
+    cyl(.105,.13,.48,.89,0,0,black);
+    cyl(.145,.145,.09,1.14,0,0,silver);
+    cyl(.105,.105,.12,1.23,0,0,blue);
+    cyl(.065,.065,.14,1.30,0,0,glass);
+
+    // حلقه‌های نور دهانه
+    for(let i=0;i<3;i++)
+        cyl(.15-i*.018,.15-i*.018,.018,
+            1.05+i*.12,0,0,blue);
+
+    // هسته انرژی مرکزی
+    box(.34,.17,.04,.05,.015,.19,black);
+    box(.25,.085,.025,.05,.015,.22,blue);
+    box(.12,.035,.028,.05,.015,.24,glass);
+
+    // نمایشگر دیجیتال
+    box(.30,.17,.045,-.40,.20,0,black);
+    box(.23,.11,.018,-.40,.205,.032,glass);
+    box(.16,.012,.01,-.40,.235,.045,blue);
+    box(.08,.012,.01,-.40,.17,.045,blue);
+
+    // نشانه‌گیر آینده‌نگر
+    box(.28,.10,.17,-.03,.30,0,black);
+    box(.20,.045,.12,-.03,.365,0,silver);
+    box(.14,.025,.09,-.03,.40,0,glass);
+    box(.09,.012,.015,-.03,.415,.05,blue);
+
+    // دسته و محافظ ماشه
+    box(.25,.35,.22,-.40,-.27,0,black);
+    box(.19,.22,.235,-.40,-.29,.015,armor);
+    for(let i=0;i<5;i++)
+        box(.16,.018,.02,-.40,-.19-i*.045,.13,silver);
+
+    // دست‌های زرهی همراه سلاح
+    const glove = new THREE.MeshStandardMaterial({
+        color:0x101b29, metalness:.65, roughness:.3
+    });
+
+    // دست پشتی روی دسته
+    box(.22,.18,.23,-.37,-.47,.10,glove);
+    box(.18,.10,.22,-.37,-.55,.10,armor);
+    box(.20,.09,.24,-.37,-.62,.10,black);
+
+    // دست جلویی زیر لوله
+    box(.30,.15,.24,.57,-.20,.10,glove);
+    box(.23,.10,.25,.60,-.28,.10,armor);
+    box(.22,.045,.26,.60,-.34,.10,black);
+
+    // خطوط نور روی دستکش‌ها
+    box(.15,.025,.025,-.37,-.50,.22,blue);
+    box(.17,.025,.025,.60,-.25,.23,blue);
+
+    return gun;
+}
+// END WORLD_WAR_CUSTOM_WEAPON_V2
+
+
+function update(dt){
+ if(!running) return;
+
+ // Fix firing cooldown
+ fireCooldown=Math.max(0,fireCooldown-dt);
+
+ const forward=(keys.w||keys.arrowup?1:0)+(keys.s||keys.arrowdown?-1:0)+joy.y;
+ const side=(keys.d||keys.arrowright?1:0)+(keys.a||keys.arrowleft?-1:0)+joy.x;
+
+ const move=new THREE.Vector2(side,forward);
+ if(move.length()>1) move.normalize();
+
+ // Smooth joystick movement
+ const blend=Math.min(1,dt*12);
+ smoothSide+=(move.x-smoothSide)*blend;
+ smoothForward+=(move.y-smoothForward)*blend;
+
+ const speed=(keys.shift?8:7.2)*dt;
+ const dx=(smoothSide*Math.cos(player.yaw)-smoothForward*Math.sin(player.yaw))*speed;
+ const dz=(smoothSide*Math.sin(player.yaw)+smoothForward*Math.cos(player.yaw))*speed;
+
+ if(!blocked(player.pos.x+dx,player.pos.z)) player.pos.x+=dx;
+ if(!blocked(player.pos.x,player.pos.z+dz)) player.pos.z+=dz;
+
+ camera.position.copy(player.pos);
+ camera.rotation.order="YXZ";
+ camera.rotation.y=player.yaw;
+ camera.rotation.x=player.pitch;
+
+ // Switch between ship and Mars atmosphere
+ const outsideMars = player.pos.z < -25.5;
+
+ if(outsideMars !== marsMode){
+  marsMode = outsideMars;
+
+  if(marsMode){
+   scene.background.set(0xb96b50);
+   scene.fog = marsEnvironment.fog;
+  } else {
+   scene.background.set(0x101d30);
+   scene.fog = shipFog;
+  }
+ }
+
+ const moving=move.length()>.08;
+ weapon.position.y=-Math.sin(performance.now()*.012)*(moving?.018:0);
+ weapon.rotation.z=Math.sin(performance.now()*.009)*(moving?.012:0);
+}
+
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min((now-last)/1000,.04);last=now;update(dt);
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+loading.style.display="none";

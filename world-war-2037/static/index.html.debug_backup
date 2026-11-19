@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NEX ARENA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="loading"><div class="logo">NEX <span>ARENA</span></div><p>Preparing arena...</p></div>
+<div id="hud">
+  <div class="topbar">
+    <div class="brand">NEX <b>ARENA</b><small>BOT TRAINING</small></div>
+    <div class="score"><span>BLUE <b id="blueScore">0</b></span><span>RED <b id="redScore">0</b></span></div>
+    <div class="timer" id="timer">02:00</div>
+  </div>
+  <div class="crosshair"><i></i><b></b></div>
+  <div class="bottom">
+    <div class="status"><span>SHIELD</span><div class="bar"><i id="healthBar"></i></div><b id="health">100</b></div>
+    <div class="hint" id="hint">Drag to look · Joystick to move · TAP to TAG</div>
+  </div>
+  <div id="message"></div>
+  <div id="touch">
+    <div id="stickZone"><div id="stick"><span></span></div></div>
+    <button id="tagBtn">TAG</button>
+  </div>
+</div>
+<div id="menu" class="panel">
+  <div class="panelbox">
+    <div class="eyebrow">TACTICAL SIMULATION · SEASON 01</div>
+    <h1>NEX <span>ARENA</span></h1>
+    <p class="sub">FIRST-PERSON BOT TRAINING</p>
+    <div class="preview">
+      <div class="preview-ring"></div><div class="preview-core"></div>
+      <div class="preview-label">NEX COMBAT SIMULATION</div>
+    </div>
+    <div class="stats"><div><b>3</b><small>BLUE BOTS</small></div><div><b>3</b><small>RED BOTS</small></div><div><b>02:00</b><small>ROUND</small></div></div>
+    <button id="startBtn">ENTER ARENA <span>→</span></button>
+    <small class="foot">Fictional sci-fi energy-tag game · No real weapons</small>
+  </div>
+</div>
+<script type="module" src="game.js"></script>
+</body>
+</html>
